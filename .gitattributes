@@ -1,0 +1,7 @@
+*.meta             text eol=lf
+*.sh               text eol=lf
+*.vspscc           text eol=lf
+.htaccess          text eol=lf
+*.unity            text eol=lf
+*.asset            text eol=lf
+*.prefab           text eol=lf

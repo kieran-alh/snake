@@ -14,29 +14,33 @@ public class Snake : MonoBehaviour
     public int gridWidth;
     public int gridHeight;
 
-    // Private
+    // Input
     SnakeInputActions snakeInputActions;
-
-    // Movement Input controls
     Vector2 movementInput;
 
+    // Movement
     //Current Direction based on movementInput
     Vector2Int moveDirection;
     Vector2Int prevMoveDirection;
     //Snake head current gridPosition
     Vector2Int gridPosition;
+    Vector2Int prevGridPosition;
     float moveTimer;
-    float maxMoveTime = .20f;
+    float maxMoveTime = .12f;
     float angle;
 
+    // Body
     int bodySize = 0;
     // Holds the positions of each snake body segment
-    List<Vector2Int> snakeBodyPositions;
+    List<SnakeBodyPosition> snakeBodyPositions;
     // Holds all the snake body game objects
     List<SnakeBodySegment> snakeBodySegments;
 
+    // Collision
     float collisionTime = -1;
     float maxCollisionTime = 0;
+    bool isCollidingObstacle = false;
+    float collisionBufferMultiplier = 20f;
 
     private void Awake()
     {
@@ -64,7 +68,7 @@ public class Snake : MonoBehaviour
 
     void SetupMovement()
     {
-        snakeBodyPositions = new List<Vector2Int>();
+        snakeBodyPositions = new List<SnakeBodyPosition>();
         snakeBodySegments = new List<SnakeBodySegment>();
 
         gridPosition = new Vector2Int(gridWidth / 2, gridHeight / 2);
@@ -80,7 +84,7 @@ public class Snake : MonoBehaviour
             h = h < 0 ? -1 : 1;
         if (v != 0)
             v = v < 0 ? -1 : 1;
-
+        prevMoveDirection = moveDirection;
         // Right
         if (h == 1)
         {
@@ -126,14 +130,15 @@ public class Snake : MonoBehaviour
     void Move()
     {
         moveTimer += Time.deltaTime;
-        //if (maxCollisionTime != 0)
-        //    collisionTime += Time.deltaTime;
+        if (maxCollisionTime != 0)
+            collisionTime += Time.deltaTime;
 
         if (moveTimer >= maxMoveTime)
         {
             // Insert the current position into the body list
-            snakeBodyPositions.Insert(0, gridPosition);
+            snakeBodyPositions.Insert(0, new SnakeBodyPosition(gridPosition, moveDirection, angle));
 
+            prevGridPosition = gridPosition;
             gridPosition += moveDirection;
             moveTimer -= maxMoveTime;
 
@@ -147,59 +152,29 @@ public class Snake : MonoBehaviour
                 snakeBodyPositions.RemoveAt(snakeBodyPositions.Count - 1);
 
             // Update the heads position
+
             transform.position = new Vector3(gridPosition.x, gridPosition.y);
             transform.eulerAngles = new Vector3(0, 0, angle);
 
-            // Update the tail positions
-            for (int i = 0; i < snakeBodyPositions.Count; i++)
+            // Don't move the tail if snake is colliding with obstacle
+            if (!isCollidingObstacle)
             {
-                Vector2Int bodyPosition = snakeBodyPositions[i];
-                snakeBodySegments[i].SetBodyPosition(bodyPosition);
+                // Update the tail positions
+                for (int i = 0; i < snakeBodyPositions.Count; i++)
+                {
+                    snakeBodySegments[i].SetBodyPosition(snakeBodyPositions[i]);
 
-                // If there is a mismatch in size, Error
-                if (i > snakeBodySegments.Count)
-                    Debug.LogError($"Snake body size={bodySize} and number of body segments={snakeBodySegments.Count} don't match.");
+                    // If there is a mismatch in size, Error
+                    if (i > snakeBodySegments.Count)
+                        Debug.LogError($"Snake body size={bodySize} and number of body segments={snakeBodySegments.Count} don't match.");
+                }
             }
         }
 
-        // Death Check
-        /*
-        if (collisionTime > maxCollisionTime)
-        {
-            OnDeath();
-        }
-        */
+        CheckDeath();
     }
-    /*
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        switch (collision.gameObject.tag)
-        {
-            case Constants.SNAKE_TAG:
-            case Constants.BORDER_TAG:
-                Debug.Log($"HIT: {collision.gameObject.name}");
-                collisionTime = 0f;
-                maxCollisionTime = 100 * maxMoveTime;
-                break;
-        }
-    }
-    */
-    /*
-    private void OnCollisionExit2D(Collision2D collision)
-    {
-        switch (collision.gameObject.tag)
-        {
-            case Constants.SNAKE_TAG:
-            case Constants.BORDER_TAG:
-                Debug.Log($"EXIT: {collision.gameObject.name}");
-                collisionTime = 0f;
-                maxCollisionTime = -1f;
-                break;
-        }
-    }
-    */
+
     // Trigger Collision for Snake Head
-    /*
     private void OnTriggerEnter2D(Collider2D collision)
     {
         switch(collision.gameObject.tag)
@@ -207,14 +182,15 @@ public class Snake : MonoBehaviour
             case Constants.SNAKE_TAG:
             case Constants.BORDER_TAG:
                 Debug.Log($"HIT: {collision.gameObject.name}");
+                isCollidingObstacle = true;
+                moveDirection = Vector2Int.zero;
                 collisionTime = 0f;
-                maxCollisionTime = 100*maxMoveTime;
+                maxCollisionTime = collisionBufferMultiplier*maxMoveTime;
                 break;
         }
     }
-    */
+   
     // Trigger Collision Exit for Snake Head
-    /*
     private void OnTriggerExit2D(Collider2D collision)
     {
         switch (collision.gameObject.tag)
@@ -222,26 +198,31 @@ public class Snake : MonoBehaviour
             case Constants.SNAKE_TAG:
             case Constants.BORDER_TAG:
                 Debug.Log($"EXIT: {collision.gameObject.name}");
+                isCollidingObstacle = false;
                 collisionTime = 0f;
                 maxCollisionTime = -1f;
                 break;
         }
     }
-    */
+
 
     public void OnFoodCollision(int sizeDelta)
     {
         bodySize += sizeDelta;
     }
 
-    public void OnDeath()
+    public void CheckDeath()
     {
-        collisionTime = -1;
-        for (int i = 0; i < snakeBodySegments.Count; i++)
+        // Death Check
+        if (isCollidingObstacle && collisionTime > maxCollisionTime)
         {
-            Destroy(snakeBodySegments[i].bodySegmentGameObj);
+            Debug.Log("Death");
+            for (int i = 0; i < snakeBodySegments.Count; i++)
+            {
+                Destroy(snakeBodySegments[i].bodySegmentGameObj);
+            }
+            Destroy(this.gameObject);
         }
-        Destroy(this.gameObject);
     }
 
     void CreateSnakeBodySegment()
@@ -252,7 +233,10 @@ public class Snake : MonoBehaviour
     public List<Vector2Int> GetSnakePositions()
     {
         List<Vector2Int> positions = new List<Vector2Int>() { gridPosition };
-        positions.AddRange(snakeBodyPositions);
+        for (int i = 0; i < snakeBodyPositions.Count; i++)
+        {
+            positions.Add(snakeBodyPositions[i].GridPosition);
+        }
         return positions;
     }
 
@@ -271,6 +255,10 @@ public class Snake : MonoBehaviour
         public GameObject bodySegmentGameObj;
         private Transform _transform;
         private Vector2Int gridPosition;
+        public Vector2Int GridPosition
+        {
+            get { return this.gridPosition; }
+        }
 
         public SnakeBodySegment(int index, Sprite snakeBodySprite)
         {
@@ -280,16 +268,42 @@ public class Snake : MonoBehaviour
             SpriteRenderer sr = segment.AddComponent<SpriteRenderer>();
             BoxCollider2D bodyCollider = segment.AddComponent<BoxCollider2D>();
             SnakeBody snakeBody = segment.AddComponent<SnakeBody>();
-            bodyCollider.size = new Vector2(.9f, .9f);
+            bodyCollider.size = new Vector2(1, .9f);
             sr.sprite = snakeBodySprite;
             sr.sortingOrder = -index;
             _transform = segment.transform;
         }
 
-        public void SetBodyPosition(Vector2Int inPosition)
+        public void SetBodyPosition(SnakeBodyPosition bodyPosition)
         {
-            this.gridPosition = inPosition;
-            _transform.position = new Vector3(inPosition.x, inPosition.y);
+            this.gridPosition = bodyPosition.GridPosition;
+            this._transform.position = new Vector3(this.gridPosition.x, this.gridPosition.y);
+            this._transform.eulerAngles = new Vector3(0, 0, bodyPosition.Angle);
+        }
+    }
+
+    private struct SnakeBodyPosition
+    {
+        Vector2Int gridPosition;
+        Vector2Int moveDirection;
+        float angle;
+        public Vector2Int GridPosition
+        {
+            get { return this.gridPosition; }
+        }
+        public Vector2Int MoveDirection
+        {
+            get { return this.moveDirection; }
+        }
+        public float Angle
+        {
+            get { return this.angle; }
+        }
+        public SnakeBodyPosition(Vector2Int gridPosition, Vector2Int moveDirection, float angle)
+        {
+            this.gridPosition = gridPosition;
+            this.moveDirection = moveDirection;
+            this.angle = angle;
         }
     }
 }

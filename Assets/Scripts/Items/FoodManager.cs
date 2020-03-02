@@ -7,13 +7,11 @@ public class FoodManager : MonoBehaviour
     public GlobalGameManager globalManager;
     public int gridWith;
     public int gridHeight;
-    public Food food;
 
     private void Start()
     {
         if (!globalManager)
             globalManager = GetComponent<GlobalGameManager>();
-        food.SetFoodManager(this);
     }
 
     public void RespawnFood(Food food, Transform foodTransform)

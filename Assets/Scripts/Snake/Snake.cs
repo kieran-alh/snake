@@ -21,7 +21,7 @@ public class Snake : MonoBehaviour
     // Movement
     //Current Direction based on movementInput
     Vector2Int moveDirection;
-    Vector2Int prevMoveDirection;
+
     //Snake head current gridPosition
     Vector2Int gridPosition;
     Vector2Int prevGridPosition;
@@ -40,7 +40,8 @@ public class Snake : MonoBehaviour
     float collisionTime = -1;
     float maxCollisionTime = 0;
     bool isCollidingObstacle = false;
-    float collisionBufferMultiplier = 20f;
+    float collisionBufferMultiplier = 2f;
+    Vector2Int onCollisionMoveDirection;
 
     private void Awake()
     {
@@ -84,7 +85,7 @@ public class Snake : MonoBehaviour
             h = h < 0 ? -1 : 1;
         if (v != 0)
             v = v < 0 ? -1 : 1;
-        prevMoveDirection = moveDirection;
+
         // Right
         if (h == 1)
         {
@@ -135,32 +136,33 @@ public class Snake : MonoBehaviour
 
         if (moveTimer >= maxMoveTime)
         {
-            // Insert the current position into the body list
-            snakeBodyPositions.Insert(0, new SnakeBodyPosition(gridPosition, moveDirection, angle));
-
-            prevGridPosition = gridPosition;
-            gridPosition += moveDirection;
             moveTimer -= maxMoveTime;
+            if (!isCollidingObstacle)
+            {
+                // Insert the current position into the body list
+                snakeBodyPositions.Insert(0, new SnakeBodyPosition(gridPosition, moveDirection, angle));
+                gridPosition += moveDirection;
+                transform.position = new Vector3(gridPosition.x, gridPosition.y);
+            }
+            transform.eulerAngles = new Vector3(0, 0, angle);
+
 
             // If the bodySize has increased since last move
             // Create the new Body segment
             if (bodySize > snakeBodySegments.Count)
                 CreateSnakeBodySegment();
 
-            // If the number of postions is greater than the body size, remove position
-            if (snakeBodyPositions.Count > bodySize)
+            // If the number of postions is greater than the bodySize+1, remove position
+            // Keep an extra buffer position to spawn new snake bodies
+            // Instead of spawning them at the origin
+            if (snakeBodyPositions.Count > bodySize + 1)
                 snakeBodyPositions.RemoveAt(snakeBodyPositions.Count - 1);
-
-            // Update the heads position
-
-            transform.position = new Vector3(gridPosition.x, gridPosition.y);
-            transform.eulerAngles = new Vector3(0, 0, angle);
 
             // Don't move the tail if snake is colliding with obstacle
             if (!isCollidingObstacle)
             {
-                // Update the tail positions
-                for (int i = 0; i < snakeBodyPositions.Count; i++)
+                // Update the tail positions, ignoring last buffer position
+                for (int i = 0; i < snakeBodyPositions.Count - 1; i++)
                 {
                     snakeBodySegments[i].SetBodyPosition(snakeBodyPositions[i]);
 
@@ -181,8 +183,8 @@ public class Snake : MonoBehaviour
         {
             case Constants.SNAKE_TAG:
             case Constants.BORDER_TAG:
-                Debug.Log($"HIT: {collision.gameObject.name}");
                 isCollidingObstacle = true;
+                onCollisionMoveDirection = moveDirection;
                 moveDirection = Vector2Int.zero;
                 collisionTime = 0f;
                 maxCollisionTime = collisionBufferMultiplier*maxMoveTime;
@@ -197,9 +199,9 @@ public class Snake : MonoBehaviour
         {
             case Constants.SNAKE_TAG:
             case Constants.BORDER_TAG:
-                Debug.Log($"EXIT: {collision.gameObject.name}");
                 isCollidingObstacle = false;
                 collisionTime = 0f;
+                moveTimer += maxMoveTime;
                 maxCollisionTime = -1f;
                 break;
         }
@@ -227,7 +229,9 @@ public class Snake : MonoBehaviour
 
     void CreateSnakeBodySegment()
     {
-        snakeBodySegments.Add(new SnakeBodySegment(snakeBodySegments.Count, snakeBody));
+        snakeBodySegments.Add(
+            new SnakeBodySegment(snakeBodySegments.Count, snakeBodyPositions[snakeBodyPositions.Count-1], snakeBody)
+            );
     }
 
     public List<Vector2Int> GetSnakePositions()
@@ -260,7 +264,7 @@ public class Snake : MonoBehaviour
             get { return this.gridPosition; }
         }
 
-        public SnakeBodySegment(int index, Sprite snakeBodySprite)
+        public SnakeBodySegment(int index, SnakeBodyPosition spawnPosition, Sprite snakeBodySprite)
         {
             GameObject segment = new GameObject($"SnakeBody{index}");
             this.bodySegmentGameObj = segment;
@@ -272,6 +276,7 @@ public class Snake : MonoBehaviour
             sr.sprite = snakeBodySprite;
             sr.sortingOrder = -index;
             _transform = segment.transform;
+            SetBodyPosition(spawnPosition);
         }
 
         public void SetBodyPosition(SnakeBodyPosition bodyPosition)
